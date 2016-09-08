@@ -1,0 +1,25 @@
+funnel_pot_test.tcl 
+
+cd MD_test/
+
+Test simulations employing tclbound forces module with a single martini water.
+
+eq1CG.namd       : namd input file
+funnel_pot.tcl : tcl boundary forces for a funnel  potential
+
+
+H2O.pdb          : pdb input file
+H2O.psf          : topology
+par/             : parameters CHARMM
+build/           : configuration and topology files
+
+%namd2 eq1CG.namd 
+
+After runnig you can load trajtory with:
+
+% vmd -e load_dcd.tcl
+
+It will draw the funnel and the periodic box
+
+
+

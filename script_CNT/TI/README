@@ -1,0 +1,6 @@
+# cd to main TI directory
+# Computes using dvdl property (potential energy only) 
+# Run makenanalysys.py
+# Run runanalysys.csh
+# Run TI_out.pl
+

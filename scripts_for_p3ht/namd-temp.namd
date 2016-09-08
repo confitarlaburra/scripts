@@ -1,0 +1,41 @@
+################################################################################
+
+  
+  # NAMD configuration file generated automatically by NAMDenergy
+
+  # It may be ugly, but it should work.
+
+  # I wouldn't recommend using it for anything else though.
+
+  ################################################################################
+
+structure		/gpfs/home/fett/+10_vel/tol_1.2_4_rod_100_P3HT_50x50x160.psf
+paraTypeCharmm		on
+parameters		/gpfs/home/fett/+10_vel/par_opls_aa_spc_gold_tol_CdSe_p3ht_CLA.inp
+numsteps		 1
+exclude			 scaled1-4
+outputname		 namd-temp
+temperature		 0
+COMmotion 		 yes
+cutoff			 12
+dielectric		 1.0
+extendedSystem			 /gpfs/home/fett/+10_vel/eq2.restart.xsc
+PME on
+PMEGridSizeX 109
+PMEGridSizeY 109
+PMEGridSizeZ 230
+vdwgeometricsigma yes
+switchdist		 10
+pairInteraction		 on
+pairInteractionGroup1 1
+pairInteractionFile   namd-temp.pdb
+pairInteractionGroup2 2
+coordinates namd-temp.pdb
+set ts 0
+coorfile open dcd namd-temp.dcd
+while { ![coorfile read] } {
+   firstTimestep $ts
+   run 0
+   incr ts 1
+}
+coorfile close
