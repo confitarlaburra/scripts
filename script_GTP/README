@@ -1,0 +1,35 @@
+change_to_0_360.pl              :  Script to change from (-180 - 180) angles to (0 - 360).  change_to_0_360.pl tser_dihe_ouput.dat
+
+count_sys_anti.pl               :  Script to count the syn and anti conformations (log output). count_sys_anti.pl (0 360  tser_dihe_ouput.dat) 
+
+Delta_G_LEUS.pl                 :  Delta G using Unbiasing probability formula log(P_syn/P_anti). Delta_G_LEUS.pl angle_vs_tser_potential_plot
+
+Delta_G_pmf.pl                  :  Delta G from bias, integrating Syn area and Anti area. Henchamn formulation. Delta_G_pmf.pl LE_potentialsv2_G_in_time_v3.pl_output
+
+Delta_G_syn_anti.pl             :  Delta G syn and anti from perturbation formula. Delta_G_syn_anti.pl  angle_vs_tser_potential_plot
+
+Syn_anti_G.pl                   :  Delta G fro population of Syn/Anti. Syn_anti_G.pl (0 360  tser_dihe_ouput.dat)
+
+LE_potentialsv2_G_in_time_v3.pl :  LE potentials in time plus delta G unbiassing. LE_potentialsv2_G_in_time_v3.pl trs_file
+
+runanalysis_delta_G_time.csh   :   script to run LE_potentialsv2_G_in_time_v3.pl for splitted simulations
+
+replace_LES_CNF.pl              :  Replace LES potentials (is has huge a bug).
+
+Total_transitions.pl            :  Measures transitions, anty syn. Total_transitions.pl (0 360  tser_dihe_ouput.dat)
+
+tser_print.pl                   : prints input for a tser run (dihed).
+
+ener_print.pl                   : prints input for a ene_ana run (totsp) 
+
+change_convergence_time.pl      : prints values for a 2 columns input at  certain value interval for a blockaverage calculation change_convergence_time.pl file row to stop
+
+make_analysis_dihed.py         : dihed analysis for a TI run (GTP) 
+
+runanalysis_dihed.csh          : run it afer make_analisys_dihed.py (change of a while loop future)
+
+makenalysis.py                 : DH/Dl (totfren)  analisys for a TI run (change for a while loop fture)
+
+TI_out.pl                      :  Integration and analysys of TI MDS. TI_out.pl in directory of TI (run in after doing the analyses in each TI directory) 
+
+LE_freeze_mk_cript.pl          : After a LE run, generates directories to run frozen potential simulations for each MD (eg 1ns parts). Generates a run_freeze.csh to submito the jobs
