@@ -1,31 +1,32 @@
 ## INPUT ##
 
 #Input PSF
-set psf  colanic_ch.box.ion.psf
-set reference_pdb colanic_ch.box.ion.pdb
+set psf   ../../TRPV1.POPE.Wat.box.ion.psf 
+set reference_pdb  ../../TRPV1.POPE.Wat.box.ion.pdb
 #Number of input dcd
-set firstDCD 3
-set lastDCD  4
+set firstDCD 8
+set lastDCD  9
 set steps 0
 #inputs dcd (asumes that dcd start with "eq")
 for {set i $firstDCD} {$i <= $lastDCD} {incr i} {
-    set dcd($i) "eq$i.dcd"
+    set dcd($i) "../eq$i.dcd"
 }
 
-set descriptors {RMSD RGYR SASA}
+#set descriptors {RMSD RGYR SASA}
+set descriptors {RMSD RGYR}
 #Atoms Names comprising each descriptor
 
-set selTextRMSD  "resname LIG and noh"
-set selTextRGYR  "resname LIG"
-set selTextSASA  "resname LIG"
+set selTextRMSD  "protein and name CA"
+set selTextRGYR  "protein"
+#set selTextSASA  "resname LIG"
 
 set selections(RMSD)  $selTextRMSD
 set selections(RGYR)  $selTextRGYR
-set selections(SASA)  $selTextSASA
+#set selections(SASA)  $selTextSASA
 
 
 #Path to bigdcd script
-set bigdcd ../ana_scripts/bigdcd.tcl
+set bigdcd /home/jgarate/opt/scripts/script_dipole/bigdcd.tcl
 #outname
 set outname RMSD_RGYR_SASA.dat
 #First frame to perform analyes

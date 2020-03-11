@@ -1,6 +1,6 @@
 #Input Parameters
 ##Ideally run with a filtered trajectory, as this code load the full trajectory in memory###
-set input_pdb  No.TIP3.pdb
+set input_pdb  step5_assembly.xplor_ext.pdb
 set input_dcd  full.10.dcd
 set RMSFselection "protein and name CA"
 set RMSDslection "protein and name CA"

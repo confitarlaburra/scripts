@@ -1,0 +1,107 @@
+set CollDipPz 16.57
+set Chain(A) {9.25 0.45}
+set Chain(B) {9.25 0.45}
+set Chain(C) {9.25 0.45}
+set Chain(D) {9.25 0.45}
+set chains {A B C D}
+set firstRes 631
+set lastRes 643
+#Average Dipole Magnitudes by chain and residue
+set Dip(A) {}
+set Dip(B) {}
+set Dip(C) {}
+set Dip(D) {}
+#Average P1z by chain and residue
+set Pz(A) {}
+set Pz(B) {}
+set Pz(C) {}
+set Pz(D) {}
+
+#Procedures
+
+proc ColorDip { &arrName} {
+    global chains firstRes lastRes      
+    upvar 1 ${&arrName} Dip
+    set all [atomselect top all]
+    $all set beta 0
+    $all delete
+    foreach chain $chains {
+	set j 0
+	for {set i $firstRes} {$i <=$lastRes} {incr i} {
+	    set sel [atomselect top "chain $chain and resid $i"]
+	    $sel set beta [lindex $Dip($chain) $j]
+	    incr j
+	    $sel delete
+	}
+    }
+}
+
+
+proc ColorChain { &arrName} {
+    global chains firstRes lastRes      
+    upvar 1 ${&arrName} Chain
+    set all [atomselect top all]
+    $all set beta 0
+    $all delete
+    foreach chain $chains {
+	set sel [atomselect top "chain $chain and resid $firstRes to $lastRes"]
+	$sel set beta [lindex $Chain($chain) 0]
+	$sel delete
+    }
+}
+
+
+
+proc DrawArrowsRes { chain &arrName } {
+    global firstRes lastRes
+    upvar 1 ${&arrName} Pz
+    set j 0
+    for {set i $firstRes} {$i <=$lastRes} {incr i} {
+	set center [measure center  [atomselect top "chain $chain and resid $i and name CA"]]
+	set z [lindex $Pz($chain) $j]
+	set x [expr sqrt(1 -$z*$z)]
+	set vector {}
+	lappend vector $x
+	lappend vector 0.0
+	lappend vector $z
+	graphics top color yellow
+	graphics top cylinder $center [vecadd $center [vecscale 2 $vector]] radius 0.2 resolution 6 filled yes
+	graphics top cone [vecadd $center [vecscale 2 $vector]] [vecadd $center [vecscale 2.7 $vector]] radius 0.34 resolution 6
+	incr j
+    }
+}
+
+proc DrawArrowsChain {&arrName } {
+    global firstRes lastRes chains
+    upvar 1 ${&arrName} Chain
+    foreach chain $chains {
+	set center [measure center  [atomselect top "chain $chain and resid $firstRes to $lastRes"]]
+	set z [lindex $Chain($chain) 1]
+	set x [expr sqrt(1 -$z*$z)]
+	set vector {}
+	lappend vector $x
+	lappend vector 0.0
+	lappend vector $z
+	graphics top color green
+	graphics top cylinder $center [vecadd $center [vecscale 10 $vector]] radius 0.2 resolution 6 filled yes
+	graphics top cone [vecadd $center [vecscale 10 $vector]] [vecadd $center [vecscale 12 $vector]] radius 0.34 resolution 6
+    }
+}
+
+
+
+
+proc DrawCollective { } {
+    global firstRes lastRes
+    global CollDipPz
+    set center [measure center  [atomselect top "protein and resid $firstRes to $lastRes"]]
+    set z $CollDipPz
+    set x [expr sqrt(1 -$z*$z)]
+    set vector {}
+    lappend vector $x
+    lappend vector 0.0
+    lappend vector $z
+    graphics top color yellow
+    graphics top cylinder $center [vecadd $center [vecscale 15 $vector]] radius 0.2 resolution 6 filled yes
+    graphics top cone [vecadd $center [vecscale 15 $vector]] [vecadd $center [vecscale 17 $vector]] radius 0.34 resolution 6
+}

@@ -1,0 +1,639 @@
+## INPUT ##
+### Run example :
+# vmd -e Dipole_sec.tcl
+
+#Input PSF
+set psf /home/jgarate/work/TRPV1/MD/TRPV1.POPE.Wat.box.ion.psf
+#set psf /home/jgarate/work/TRPV1/coord/NoLoop/TRPV1.psf
+#Number of input dcd
+set firstDCD 9
+set lastDCD  9
+set firstRes 631 
+set lastRes  643
+set bigdcd    /home/jgarate/opt/scripts/TCL_procedures/bigdcd.tcl
+#Cluster
+set execName  /home/jgarate/opt/gromos++1.4.1-jag/bin/tcf
+# local PC
+#set execName  /home/jgarate/opt/gromos++1.4.1/bin/tcf
+set first 0; # First snapshot
+set chains {A B C D}; #Secondary Structure elements defined in Stride
+set RefVec {0 0 1}
+#inputs dcd (asumes that dcd start with "eq")
+#set j 1
+for {set i $firstDCD} {$i <= $lastDCD} {incr i} {
+    #set dcd($i) ../filtered/filt.10.dcd
+    #set dcd($j) $i/out/filtered/full.dcd
+    #set dcd($j) $i/out/eq1.dcd
+    set dcd($i) ../eq$i.dcd
+}
+#Path to bigdcd script
+
+## END INPUT ##
+################################################################################################################################################ 
+### Do not Change!!!#####
+set steps 0
+set every 1000
+# And arrays for totals 
+set CollectiveDip {}
+set CollectiveP1 {}
+
+#A.e
+#Binning parameters
+set minDip 0;   # Min Dip Value
+set maxDip 25;  # Max Dip Value
+set minP1 -1;   # Min Dip Value
+set maxP1 1;  # Max Dip Value
+set binNumDip 25; # Numbers of bins
+set binNumP1  20
+set BinSizeDip [expr 1.000*($maxDip-$minDip)/$binNumDip]
+set BinSizeP1  [expr 1.000*($maxP1-$minP1)/$binNumP1]
+
+# Init Arrays for histograms
+
+# Collective dipole bin
+for { set i 0}  {$i < $binNumDip} {incr i} {
+    for { set j 0}  {$j < $binNumP1} {incr j} {
+	set DipvsP1zColl($i,$j) 0
+    }
+}
+#Helix dipole bin
+foreach chain $chains {
+    for { set i 0}  {$i < $binNumDip} {incr i} {
+	for { set j 0}  {$j < $binNumP1} {incr j} {
+	    set DipvsP1zChain($chain,$i,$j) 0
+	}
+    }
+}
+#Each residue bin and time series for each helix and each residues
+foreach chain $chains {
+    set DipPep($chain) {}
+    set P1Pep($chain) {}
+    for { set i $firstRes}  {$i <= $lastRes} {incr i} {
+	set DipRes($chain,$i) {}
+	set P1ZRes($chain,$i) {}
+	set P1PepRes($chain,$i) {}
+	for { set j 0}  {$j < $binNumDip} {incr j} {
+	    for { set k 0}  {$k < $binNumP1} {incr k} {
+		set DipvsP1z($chain,$i,$j,$k) 0
+		set DipvsP1Pep($chain,$i,$j,$k) 0
+	    }
+	}
+    }
+}
+
+## PROCEDURES ##
+
+#Computes Collective Dipole from Resid 1 to Resid2 of all chains
+#and its dot product with a reference vector (e.g. 001) 
+#Returns dipole in A*e
+proc dipoleCalcAll {resid1 resid2 refVec1} {
+    set tmpList {}
+    set sel [atomselect top "protein and resid $resid1 to $resid2"]
+    set dip [measure dipole $sel -masscenter]
+    set dipLength [veclength $dip]
+    set P11 [vecdot [vecnorm $dip] [vecnorm $refVec1]]
+    $sel delete
+    lappend tmpList $dipLength 
+    lappend tmpList $P11 
+    return $tmpList
+}
+#Computes Collective Dipole of a single residue (id and chain)
+#and its dot product with two reference vectors 
+#Returns dipole in A*e
+proc dipoleCalcRes {chain resid refVec1 refVec2 } {
+    set tmpList {}
+    set sel [atomselect top "protein and chain $chain and resid $resid"]
+    set dip [measure dipole $sel -masscenter]
+    set dipLength [veclength $dip]
+    set P11 [vecdot [vecnorm $dip] [vecnorm $refVec1]]
+    set P12 [vecdot [vecnorm $dip] [vecnorm $refVec2]]
+    $sel delete
+    lappend tmpList $dipLength 
+    lappend tmpList $P11 
+    lappend tmpList $P12 
+    return $tmpList
+}
+#Computes Collective Dipole from Resid 1 to Resid1 of a single chain
+#and its dot product with two reference vectors 
+#Returns dipole in A*e
+proc dipoleCalcPep {chain resid1 resid2 refVec1} {
+    set tmpList {}
+    set sel [atomselect top "protein and chain $chain and resid $resid1 to $resid2"]
+    set dip [measure dipole $sel -masscenter]
+    set dipLength [veclength $dip]
+    set P11 [vecdot [vecnorm $dip] [vecnorm $refVec1]]
+    $sel delete
+    lappend tmpList $dipLength 
+    lappend tmpList $P11
+    lappend tmpList $dip
+    return $tmpList
+}
+#Fill all arays
+proc RunAna {&arrName1 &arrName2 &arrName3 &arrName4 &arrName5 &arrName6 &arrName7 &arrName8 &arrName9} {
+    global firstRes lastRes chains RefVec
+    global CollectiveDip CollectiveP1
+    global minDip maxDip minP1 maxP1 binNumDip binNumP1
+    global BinSizeDip BinSizeP1 
+    upvar 1 ${&arrName1} DipPep  
+    upvar 1 ${&arrName2} P1Pep 
+    upvar 1 ${&arrName3} DipRes 
+    upvar 1 ${&arrName4} P1ZRes 
+    upvar 1 ${&arrName5} P1PepRes
+    upvar 1 ${&arrName6} DipvsP1z
+    upvar 1 ${&arrName7} DipvsP1Pep
+    upvar 1 ${&arrName8} DipvsP1zColl
+    upvar 1 ${&arrName9} DipvsP1zChain
+    #Computes collective dipole of all helixes (from $chains)
+    set results [dipoleCalcAll $firstRes $lastRes $RefVec]
+    set dip [lindex $results 0]
+    set P1z [lindex $results 1]
+    lappend CollectiveDip $dip
+    lappend CollectiveP1 $P1z
+    set stepDip   [expr int(( ($dip-$minDip)/($BinSizeDip) ))]
+    set stepP1z   [expr int(( ($P1z-$minP1)/($BinSizeP1) ))]
+    #puts "$dip $P1z"
+    if {$stepDip >= 0 &&  $stepDip < $binNumDip} {
+	if {$stepP1z >= 0 &&  $stepP1z < $binNumP1} {
+	    incr DipvsP1zColl($stepDip,$stepP1z)
+	}
+    }
+    foreach chain $chains {
+	#Computes dipole of each helix  
+	set results [dipoleCalcPep $chain $firstRes $lastRes $RefVec]
+	set dip [lindex $results 0]
+	set P1z [lindex $results 1]
+	set RefVecPep [lindex $results 2]
+	lappend DipPep($chain) $dip
+	lappend P1Pep($chain)  $P1z
+	set stepDip   [expr int(( ($dip-$minDip)/($BinSizeDip) ))]
+	set stepP1z   [expr int(( ($P1z-$minP1)/($BinSizeP1) ))]
+	#puts "$chain $dip $P1z"
+        if {$stepDip >= 0 &&  $stepDip < $binNumDip} {
+	    if {$stepP1z >= 0 &&  $stepP1z < $binNumP1} {
+		incr DipvsP1zChain($chain,$stepDip,$stepP1z)
+	    }
+	}
+	#Computes dipole of each residue
+	for { set i $firstRes}  {$i <= $lastRes} {incr i} {
+	    set results [dipoleCalcRes $chain $i $RefVec $RefVecPep]
+	    set dip [lindex $results 0]
+	    set P1z [lindex $results 1]
+	    set P1pep [lindex $results 2]
+	    lappend DipRes($chain,$i)   $dip
+	    lappend P1ZRes($chain,$i)   $P1z
+	    lappend P1PepRes($chain,$i) $P1pep
+	    set stepDip   [expr int(( ($dip-$minDip)/($BinSizeDip) ))]
+	    set stepP1z   [expr int(( ($P1z-$minP1)/($BinSizeP1) ))]
+	    set stepP1pep [expr int(( ($P1pep-$minP1)/($BinSizeP1) ))]
+	    #puts "$chain $i $dip $P1z $P1pep"
+	    if {$stepDip >= 0 &&  $stepDip < $binNumDip} {
+		if {$stepP1z >= 0 &&  $stepP1z < $binNumP1} {
+		    incr DipvsP1z($chain,$i,$stepDip,$stepP1z)
+		}
+		if {$stepP1pep >= 0 &&  $stepP1pep < $binNumP1} {
+		    incr DipvsP1Pep($chain,$i,$stepDip,$stepP1pep)
+		}
+	    }
+	}
+    }
+}
+    
+
+proc WriteHistColl { &arrName } {
+    global minDip maxDip minP1 maxP1 binNumDip binNumP1
+    global BinSizeDip BinSizeP1
+    global firstRes lastRes chains
+    upvar 1 ${&arrName} DipvsP1zColl
+    set Total 0
+    for { set i 0}  {$i < $binNumDip} {incr i} {
+	for { set j 0}  {$j < $binNumP1} {incr j} {
+	    set Total   [expr $DipvsP1zColl($i,$j) + $Total] 
+	}
+    }
+    set outZ [open Dip.Coll.$chains.$firstRes.to.$lastRes.P1z.dat w]
+    puts $outZ   "#|u| A.e         P1z         rho"
+    for { set i 0}  {$i < $binNumDip} {incr i} {
+	set dipole [format {%0.2f} [expr $i*$BinSizeDip + $minDip + $BinSizeDip*0.5]]
+	for { set j 0}  {$j < $binNumP1} {incr j} {
+	    set P1    [format {%11.2f} [expr $j*$BinSizeP1 + $minP1 + $BinSizeP1*0.5]]
+	    set DensZ [format {%11.2f} [expr 1.00*$DipvsP1zColl($i,$j)/$Total]]
+	    puts -nonewline $outZ $dipole
+	    puts -nonewline $outZ $P1
+	    puts -nonewline $outZ $DensZ
+	    puts $outZ ""
+	}
+    }
+    close $outZ
+}
+
+proc WriteHistChain { &arrName } {
+    global minDip maxDip minP1 maxP1 binNumDip binNumP1
+    global BinSizeDip BinSizeP1
+    global firstRes lastRes chains
+    upvar 1 ${&arrName} DipvsP1zChain
+    # Init arrays
+    foreach chain $chains {
+	set Total($chain) 0
+    }
+    foreach chain $chains {
+	for { set i 0}  {$i < $binNumDip} {incr i} {
+	    for { set j 0}  {$j < $binNumP1} {incr j} {
+		set Total($chain)   [expr $DipvsP1zChain($chain,$i,$j) + $Total($chain)] 
+	    }
+	}
+    }
+    foreach chain $chains {
+	set outZ [open Dip.P1z.$chain.$firstRes.to.$lastRes.dat w]
+	puts $outZ   "#|u| A.e         P1z     rho"
+	for { set i 0}  {$i < $binNumDip} {incr i} {
+	    set dipole [format {%0.2f} [expr $i*$BinSizeDip + $minDip + $BinSizeDip*0.5]]
+	    for { set j 0}  {$j < $binNumP1} {incr j} {
+		set P1    [format {%11.2f}    [expr $j*$BinSizeP1 + $minP1 + $BinSizeP1*0.5]]
+		set DensZ [format {%11.2f} [expr 1.00*$DipvsP1zChain($chain,$i,$j)/$Total($chain)]]
+		puts -nonewline $outZ $dipole
+		puts -nonewline $outZ $P1
+		puts -nonewline $outZ $DensZ
+		puts $outZ ""
+	    }
+	}
+	close $outZ
+    }
+    #Integrate, for all chains
+    set Totals 0
+    for { set i 0}  {$i < $binNumDip} {incr i} {
+	for { set j 0}  {$j < $binNumP1} {incr j} {
+	    set  DipvsP1z($i,$j) 0
+	}
+    }
+    foreach chain $chains  {
+	for { set i 0}  {$i < $binNumDip} {incr i} {
+	    for { set j 0}  {$j < $binNumP1} {incr j} {
+		set Totals [expr $DipvsP1zChain($chain,$i,$j) + $Totals ]
+		set DipvsP1z($i,$j)  [expr $DipvsP1zChain($chain,$i,$j) + $DipvsP1z($i,$j)] 
+	    }
+	}
+    }
+    #puts $Totals
+    set outZ [open Dip.P1z.AvgChain.$firstRes.to.$lastRes.dat w]
+    puts $outZ   "|u| A.e         P1z     rho"
+    for { set i 0}  {$i < $binNumDip} {incr i} {
+	set dipole [format {%0.2f} [expr $i*$BinSizeDip + $minDip + $BinSizeDip*0.5]]
+	for { set j 0}  {$j < $binNumP1} {incr j} {
+	    set P1 [format {%11.2f} [expr $j*$BinSizeP1 + $minP1 + $BinSizeP1*0.5]]
+	    set DensZ [format {%11.2f} [expr 1.00*$DipvsP1z($i,$j)/$Totals]]
+	    puts -nonewline $outZ $dipole
+	    puts -nonewline $outZ $P1
+	    puts -nonewline $outZ $DensZ
+	    puts $outZ ""
+	}
+    }
+    close $outZ
+}
+
+
+
+
+proc WriteHistRes { &arrName1 &arrName2} {
+    global firstRes lastRes chains
+    global minDip maxDip minP1 maxP1 binNumDip binNumP1
+    global BinSizeDip BinSizeP1 
+    upvar 1 ${&arrName1} DipvsP1z
+    upvar 1 ${&arrName2} DipvsP1Pep
+    #init for each residue an each monomer (totals)
+    foreach chain $chains {
+	for { set i $firstRes}  {$i <= $lastRes} {incr i} {
+	    set TotalsP1Z($chain,$i) 0
+	    set TotalsP1Pep($chain,$i) 0
+	}
+    }
+    #get Totals (integrate)
+    foreach chain $chains {
+	for { set i $firstRes}  {$i <= $lastRes} {incr i} {
+	    for { set j 0}  {$j < $binNumDip} {incr j} {
+		for { set k 0}  {$k < $binNumP1} {incr k} {
+		    set TotalsP1Z($chain,$i)   [expr $DipvsP1z($chain,$i,$j,$k) + $TotalsP1Z($chain,$i)] 
+		    set TotalsP1Pep($chain,$i) [expr $DipvsP1Pep($chain,$i,$j,$k) + $TotalsP1Pep($chain,$i)] 
+		}
+	    }
+	}
+    }
+    #Out
+    foreach chain $chains {
+	for { set i $firstRes}  {$i <= $lastRes} {incr i} {
+	    set outZ [open Dip.P1z.$chain.$i.dat w]
+	    set outPep [open Dip.P1pep.$chain.$i.dat w]
+	    puts $outZ   "#|u| A.e         P1z     rho"
+	    puts $outPep "#|u| A.e         P1Pep     rho"
+	    for { set j 0}  {$j < $binNumDip} {incr j} {
+		set dipole [format {%0.2f} [expr $j*$BinSizeDip + $minDip + $BinSizeDip*0.5]]
+		for { set k 0}  {$k < $binNumP1} {incr k} {
+		    set P1 [format {%11.2f} [expr $k*$BinSizeP1 + $minP1 + $BinSizeP1*0.5]]
+		    set DensZ [format {%11.2f} [expr 1.00*$DipvsP1z($chain,$i,$j,$k)/$TotalsP1Z($chain,$i)]]
+		    set DensP [format {%11.2f} [expr 1.00*$DipvsP1Pep($chain,$i,$j,$k)/$TotalsP1Pep($chain,$i)]]
+		    puts -nonewline $outZ $dipole
+		    puts -nonewline $outZ $P1
+		    puts -nonewline $outZ $DensZ
+		    puts -nonewline $outPep $dipole
+		    puts -nonewline $outPep $P1
+		    puts -nonewline $outPep $DensP
+		    puts $outZ ""
+		    puts $outPep ""
+		}
+	    }
+	    close $outZ
+	    close $outPep
+	}
+    }
+    #init for average over 4 monomers
+    for { set i $firstRes}  {$i <= $lastRes} {incr i} {
+	set TotalsP1ZRes($i) 0
+	set TotalsP1PepRes($i) 0
+    }
+    for { set i $firstRes}  {$i <= $lastRes} {incr i} {
+	for { set j 0}  {$j < $binNumDip} {incr j} {
+	    for { set k 0}  {$k < $binNumP1} {incr k} {
+		set DipvsP1zRes($i,$j,$k) 0
+		set DipvsP1PepRes($i,$j,$k) 0
+	    }
+	}
+    }
+    #fill, integrate
+    for { set i $firstRes}  {$i <= $lastRes} {incr i} {
+	foreach chain $chains {
+	    for { set j 0}  {$j < $binNumDip} {incr j} {
+		for { set k 0}  {$k < $binNumP1} {incr k} {
+		    set TotalsP1ZRes($i)         [expr 1.0*$DipvsP1z($chain,$i,$j,$k) + 1.0*$TotalsP1ZRes($i)] 
+		    set TotalsP1PepRes($i)       [expr 1.0*$DipvsP1Pep($chain,$i,$j,$k) + 1.0*$TotalsP1PepRes($i)]
+		    set DipvsP1zRes($i,$j,$k)    [expr 1.0*$DipvsP1zRes($i,$j,$k) + 1.0*$DipvsP1z($chain,$i,$j,$k)]
+		    set DipvsP1PepRes($i,$j,$k)  [expr 1.0*$DipvsP1PepRes($i,$j,$k) + 1.0*$DipvsP1Pep($chain,$i,$j,$k)]
+		}
+	    }
+	}
+    }
+    #out
+    for { set i $firstRes}  {$i <= $lastRes} {incr i} {
+	set outZ [open Dip.P1z.$i.dat w]
+	set outPep [open Dip.P1pep.$i.dat w]
+	puts $outZ   "#|u| A.e         P1z         rho"
+	puts $outPep "#|u| A.e         P1Pep       rho"
+	for { set j 0}  {$j < $binNumDip} {incr j} {
+	    set dipole [format {%0.2f} [expr $j*$BinSizeDip + $minDip + $BinSizeDip*0.5]]
+	    for { set k 0}  {$k < $binNumP1} {incr k} {
+		set P1 [format {%11.2f} [expr $k*$BinSizeP1 + $minP1 + $BinSizeP1*0.5]]
+		set DensZ [format {%11.2f} [expr 1.0*$DipvsP1zRes($i,$j,$k)/$TotalsP1ZRes($i)]]
+		set DensP [format {%11.2f} [expr 1.0*$DipvsP1PepRes($i,$j,$k)/$TotalsP1PepRes($i)]]
+		puts -nonewline $outZ $dipole
+		puts -nonewline $outZ $P1
+		puts -nonewline $outZ $DensZ
+		puts -nonewline $outPep $dipole
+		puts -nonewline $outPep $P1
+		puts -nonewline $outPep $DensP
+		puts $outZ ""
+		puts $outPep ""
+	    }
+	}
+	close $outZ
+	close $outPep
+    }
+}
+
+
+proc WriteAvgChain { &arrName1 &arrName2} {
+    global execName chains
+    upvar 1 ${&arrName1} DipPep  
+    upvar 1 ${&arrName2} P1Pep
+    #Init arrays to carry out averages with TCF
+    foreach chain $chains {
+	set DipR($chain) {}
+	set P1Rz($chain) {}
+    }
+    foreach chain $chains {
+	set tcfinNameD  "dip.in"
+	set tcfoutNameD "dip.out"
+	set tcfinNameP1  "P1.in"
+	set tcfoutNameP1 "P1.out"
+	set outD [open $tcfinNameD w]
+	set outP1 [open $tcfinNameP1 w]
+	foreach dip $DipPep($chain) P1 $P1Pep($chain) {
+	    puts $outD  $dip
+	    puts $outP1 $P1
+	}
+	close $outD
+	close $outP1
+	exec $execName @files $tcfinNameD @distribution 1 > $tcfoutNameD
+	exec $execName @files $tcfinNameP1 @distribution 1 > $tcfoutNameP1
+	set inStream [open $tcfoutNameD r]
+	foreach line [split [read $inStream] \n] {
+	    if {[regexp {^\s+\S+\s+\S+\s+(\S+)\s+\S+\s+(\S+)} $line match average serror]} {
+		lappend DipR($chain) $average
+		lappend DipR($chain) $serror
+	    }
+	}
+	close $inStream
+	set inStream [open $tcfoutNameP1 r]
+	foreach line [split [read $inStream] \n] {
+	    if {[regexp {^\s+\S+\s+\S+\s+(\S+)\s+\S+\s+(\S+)} $line match average serror]} {
+		lappend P1Rz($chain) $average
+		lappend P1Rz($chain) $serror
+	    }
+	}
+	close $inStream
+    }
+    set out [open "Avg.Dip.P1z.$chains.dat" w]
+    puts $out   "#Chain     |u| A.e         error         P1z       error"
+    set i 1
+    foreach chain $chains {
+	puts -nonewline $out [format {%0s} $i]
+	puts -nonewline $out [format {%14s} [lindex $DipR($chain)   0]]
+	puts -nonewline $out [format {%14s} [lindex $DipR($chain)   1]]
+	puts -nonewline $out [format {%14s} [lindex $P1Rz($chain)   0]]
+	puts -nonewline $out [format {%14s} [lindex $P1Rz($chain)   1]]
+	puts $out ""
+	incr i
+    }
+    close $out
+    exec rm $tcfinNameD $tcfoutNameD
+    exec rm $tcfinNameP1 $tcfoutNameP1
+}
+
+proc WriteAvgColl { } {
+    global firstRes lastRes chains
+    global CollectiveDip CollectiveP1
+    global execName 
+    # Write Avg for collective Dipoles
+    set tcfinNameD  "dip.in"
+    set tcfoutNameD "dip.out"
+    set tcfinNameP1  "P1.in"
+    set tcfoutNameP1 "P1.out"
+    set outD [open $tcfinNameD w]
+    set outP1 [open $tcfinNameP1 w]
+    foreach dip $CollectiveDip P1 $CollectiveP1 {
+	puts $outD  $dip
+	puts $outP1 $P1
+    }
+    close $outD
+    close $outP1
+    exec $execName @files $tcfinNameD @distribution 1 > $tcfoutNameD
+    exec $execName @files $tcfinNameP1 @distribution 1 > $tcfoutNameP1
+    set inStream [open $tcfoutNameD r]
+    # Read Collective Dipole Avg
+    foreach line [split [read $inStream] \n] {
+	if {[regexp {^\s+\S+\s+\S+\s+(\S+)\s+\S+\s+(\S+)} $line match average serror]} {
+	    set CollDipA [format {%0s} $average]
+	    set CollDipE [format {%14s} $serror]
+	}
+    }
+    close $inStream
+    set inStream [open $tcfoutNameP1 r]
+    # Read Collective P1 Avg
+    foreach line [split [read $inStream] \n] {
+	if {[regexp {^\s+\S+\s+\S+\s+(\S+)\s+\S+\s+(\S+)} $line match average serror]} {
+	    set CollP1A [format {%14s} $average]
+	    set CollP1E [format {%14s} $serror]
+	}
+    }
+    close $inStream
+    set outColle [open "Avg.Dip.P1.Coll.$chains.$firstRes.to.$lastRes.dat" w]
+    puts $outColle   "#|u| A.e          error         P1z            error"
+    puts $outColle "$CollDipA $CollDipE $CollP1A $CollP1E"
+    close $outColle
+    exec rm $tcfinNameD $tcfoutNameD $tcfinNameP1 $tcfoutNameP1
+}
+
+
+
+
+proc WriteAvgRes {&arrName1 &arrName2 &arrName3 } {
+    global firstRes lastRes chains execName
+    upvar 1 ${&arrName1} DipRes 
+    upvar 1 ${&arrName2} P1ZRes 
+    upvar 1 ${&arrName3} P1PepRes
+    #Init arrays to carry out averages with TCF
+    foreach chain $chains {
+	for { set i $firstRes}  {$i <= $lastRes} {incr i} {
+	    set DipR($chain,$i) {}
+	    set P1Rz($chain,$i) {}
+	    set P1RPep($chain,$i) {}
+	}
+    }
+    foreach chain $chains {
+	for { set i $firstRes}  {$i <= $lastRes} {incr i} {
+	    set tcfinNameD      "dip.in"
+	    set tcfoutNameD     "dip.out"
+	    set tcfinNameP1z    "P1z.in"
+	    set tcfoutNameP1z   "P1z.out"
+	    set tcfinNameP1Pep  "P1Pep.in"
+	    set tcfoutNameP1Pep "P1Pep.out"
+	    set outD     [open   $tcfinNameD     w]
+	    set outP1z   [open   $tcfinNameP1z   w]
+	    set outP1Pep [open   $tcfinNameP1Pep w]
+	    foreach dip $DipRes($chain,$i) P1z $P1ZRes($chain,$i) P1Pep $P1PepRes($chain,$i) {
+		puts $outD  $dip
+		puts $outP1z $P1z
+		puts $outP1Pep $P1Pep
+	    }
+	    close $outD
+	    close $outP1z
+	    close $outP1Pep
+	    exec $execName @files $tcfinNameD     @distribution 1 > $tcfoutNameD
+	    exec $execName @files $tcfinNameP1z   @distribution 1 > $tcfoutNameP1z
+	    exec $execName @files $tcfinNameP1Pep @distribution 1 > $tcfoutNameP1Pep
+	    # Read  Dipole Avg
+	    set inStream [open $tcfoutNameD r]
+	    foreach line [split [read $inStream] \n] {
+		if {[regexp {^\s+\S+\s+\S+\s+(\S+)\s+\S+\s+(\S+)} $line match average serror]} {
+		    lappend DipR($chain,$i) $average
+		    lappend DipR($chain,$i) $serror
+		}
+	    }
+	    # Read  P1z Avg
+	    close $inStream
+	    set inStream [open $tcfoutNameP1z r]
+	    foreach line [split [read $inStream] \n] {
+		if {[regexp {^\s+\S+\s+\S+\s+(\S+)\s+\S+\s+(\S+)} $line match average serror]} {
+		    lappend P1Rz($chain,$i) $average
+		    lappend P1Rz($chain,$i) $serror
+		}
+	    }
+	    # Read  P1Pep Avg
+	    close $inStream
+	    set inStream [open $tcfoutNameP1Pep r]
+	    foreach line [split [read $inStream] \n] {
+		if {[regexp {^\s+\S+\s+\S+\s+(\S+)\s+\S+\s+(\S+)} $line match average serror]} {
+		    lappend P1RPep($chain,$i) $average
+		    lappend P1RPep($chain,$i) $serror
+		}
+	    }
+	    close $inStream
+	}
+    }
+    # Out for each chain
+    foreach chain $chains {
+	set out [open "Avg.Dip.P1z.P1Pep.$chain.$firstRes.to.$lastRes.dat" w]
+	puts $out   "#Res     |u| A.e         error         P1z          error        P1Pep        error"
+	for { set i $firstRes}  {$i <= $lastRes} {incr i} {
+	    #set Residue [format {%11.2f} $i]
+	    puts -nonewline $out [format {%0s} $i]
+	    puts -nonewline $out [format {%14s} [lindex $DipR($chain,$i)   0]]
+	    puts -nonewline $out [format {%14s} [lindex $DipR($chain,$i)   1]]
+	    puts -nonewline $out [format {%14s} [lindex $P1Rz($chain,$i)   0]]
+	    puts -nonewline $out [format {%14s} [lindex $P1Rz($chain,$i)   1]]
+	    puts -nonewline $out [format {%14s} [lindex $P1RPep($chain,$i) 0]]
+	    puts -nonewline $out [format {%14s} [lindex $P1RPep($chain,$i) 1]]
+	    puts $out ""
+	}
+	close $out
+    }
+    #Average for each residue
+    exec rm $tcfinNameD $tcfoutNameD
+    exec rm $tcfinNameP1Pep $tcfoutNameP1Pep
+    exec rm $tcfinNameP1z $tcfoutNameP1z
+}
+
+
+# Procedure to be run with bigdcd
+proc RunTopo {frame} {
+    global steps every first
+    global DipPep P1Pep DipRes P1ZRes
+    global P1PepRes DipvsP1z DipvsP1Pep
+    global DipvsP1zColl DipvsP1zChain
+    incr steps
+    if {$steps > $first } {
+	if {$steps%$every==0} {
+	    puts "frames = $steps"
+	}
+	RunAna DipPep P1Pep DipRes P1ZRes P1PepRes DipvsP1z DipvsP1Pep DipvsP1zColl DipvsP1zChain
+    }
+}
+## END PROCEDURES ##
+
+## MAIN ##
+proc main {&arrName } {
+    upvar 1 ${&arrName} dcd 
+    global psf bigdcd firstDCD lastDCD 
+    global DipvsP1z DipvsP1Pep
+    global DipvsP1zChain
+    global DipvsP1zColl
+    global DipRes P1ZRes P1PepRes
+    global DipPep P1Pep
+    mol load psf $psf    
+    source $bigdcd
+    #set j 0
+    for {set i $firstDCD} {$i <= $lastDCD} {set i [expr  $i + 1]} {
+    	bigdcd RunTopo $dcd($i)
+    	bigdcd_wait
+	#incr j
+    }
+    WriteHistRes   DipvsP1z DipvsP1Pep
+    WriteHistChain DipvsP1zChain
+    WriteHistColl  DipvsP1zColl
+    WriteAvgColl
+    WriteAvgRes    DipRes P1ZRes P1PepRes
+    WriteAvgChain  DipPep P1Pep
+}
+
+#### RUN ##
+
+main dcd
+puts "finished with $steps frames!!!"
+exit
